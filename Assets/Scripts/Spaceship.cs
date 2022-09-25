@@ -4,27 +4,56 @@ using UnityEngine;
 
 public class Spaceship : MonoBehaviour
 {
+    enum ReflectionReference
+    {
+        XAxis,
+        YAxis,
+        Origin
+    }
+
+
     [SerializeField]
-    private Vector2 accleration;
-    [SerializeField]
-    private float rotationSpeed;
-    private Vector3 shootingPos = new Vector3(0, 0, 2);
+    private Camera mainCam;
+    public Vector2 accleration;
+    public float rotationSpeed;
+    private Vector2 deacc;
+    private Vector3 shootingPos;
     private GameObject bullets;
     private Vector2 velocity;
-    private float position;
-    Vector2 posFinal;
+    private Vector2 position;
+    public GameObject testAstroid;
 
 
     private void Update()
     {
-        if (hasCollided)
-            var direction = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical")).normalized;
+        position = transform.position;
+
+        ReflectionReference reflection;
+        if (IsOutOfBounds(out reflection))
+        {
+            SpawnOppositeSite(reflection);
+            return;
+        }
+
+        shootingPos = transform.forward * new Vector2(0, 2);
+        var direction = new Vector2(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical")).normalized;
+
+        if (direction.x != 0) Rotate(direction);
+
+        position += velocity * Time.deltaTime;
 
 
 
-        velocity += accleration * Time.deltaTime;
-        posFinal += velocity * Time.deltaTime;
-        transform.position = posFinal;
+        if (velocity.magnitude >= 0 && direction.y != 1)
+        {
+            Deceleration();
+            transform.position = position;
+            return;
+        }
+
+        if (direction.y != 0) Thrust();
+        transform.position = position;
+
     }
 
     private void Shoot()
@@ -34,21 +63,83 @@ public class Spaceship : MonoBehaviour
 
     private void Rotate(Vector3 direction)
     {
-        transform.Rotate(new Vector3(direction.x, direction.y));
+        transform.Rotate(new Vector3(0, direction.x));
+    }
+
+    private void Deceleration()
+    {
+        deacc = -(Vector2.zero - velocity) / Time.deltaTime;
     }
 
     private void Thrust()
     {
+        velocity += accleration * transform.forward * Time.deltaTime;
+    }
 
+    private void SpawnOppositeSite(ReflectionReference reflection)
+    {
+        var buffer = transform.position * 0.01f;
+
+        Vector3 newPos = Vector3.zero;
+
+        var xPos = transform.position.x;
+        var yPos = transform.position.y;
+
+        if (transform.position.x > transform.position.y) newPos = new Vector3(-xPos, yPos);
+        else if (transform.position.x < transform.position.y) newPos = new Vector3(xPos, -yPos);
+        //else newPos = new Vector3(-xPos, -yPos);
+
+        transform.position = newPos + buffer;
+    }
+
+    private Vector3 GetReflection(ReflectionReference reflection)
+    {
+        switch (reflection)
+        {
+            case ReflectionReference.XAxis:
+                return new Vector2(1, 0);
+            case ReflectionReference.YAxis:
+                return new Vector2(0, 1);
+            case ReflectionReference.Origin:
+                return Vector2.zero;
+            default:
+                throw new System.Exception("WTF is this reflection?!");
+        }
+    }
+
+    private bool IsOutOfBounds(out ReflectionReference reflection)
+    {
+        var screenPos = position;
+
+        float size = mainCam.orthographicSize;
+
+        var screenHeight = size;
+        var screenWidth = size + (size * mainCam.rect.x);
+
+        var xBounds = screenPos.x < -screenWidth || screenPos.x > screenWidth;
+        var yBounds = screenPos.y < -screenHeight || screenPos.y > screenHeight;
+
+        if (xBounds && yBounds) reflection = ReflectionReference.Origin;
+        else if (xBounds) reflection = ReflectionReference.XAxis;
+        else reflection = ReflectionReference.YAxis;
+
+
+        return (
+            screenPos.x < -screenWidth || screenPos.x > screenWidth ||
+            screenPos.y < -screenHeight || screenPos.y > screenHeight
+        );
     }
 
     private bool HasCollided(Transform astroid)
     {
-        // CHeck the distance from the center of the spaceship to the 
+        // Get the distance from the center of the spaceship to the astroids center
         var distance = Vector3.Distance(astroid.position, transform.position);
-        var astroidRadius = astroid.position + astroid.transform.lossyScale;
-        var spaceshipRadius = transform.position + transform.lossyScale;
-        return distance <= ;
-    }
 
+        Vector2 astroidRadius = (Vector3.up + Vector3.right * astroid.GetComponent<Renderer>().bounds.extents.sqrMagnitude);
+        Vector2 spaceshipRadius = (Vector3.up + Vector3.right * transform.GetComponentInChildren<Renderer>().bounds.extents.sqrMagnitude);
+
+        if (distance <= (spaceshipRadius + astroidRadius).x) return true;
+
+        return false;
+    }
 }
